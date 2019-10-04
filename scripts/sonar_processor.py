@@ -14,23 +14,22 @@ __version__    = "1.0.0"
 __email__      = "pvt@mit.edu"
 __status__     = "Development"
 
-# run with:
-
-
 import sys
 import numpy as np
-
 
 import cv2
 
 import rospy
 
-# ros - messages
+# multibeam package
 from multibeam.sonar import Sonar
+from multibeam.utils import *
+
+# ros - messages
 from sensor_msgs.msg import Image
 # mb - messages
 from mb_msgs.msg import Ping, SonarScan
-
+# ros - image marshalling (cv2<->image)
 from cv_bridge import CvBridge, CvBridgeError
 
 class Processor(object):
@@ -82,22 +81,44 @@ class Processor(object):
 
         # get image
         ping = self.bridge.imgmsg_to_cv2(ping_msg.image)
-        cv2.imwrite('ping_polar.png', ping.astype(np.uint8))
+        # cv2.imwrite('ping_polar.png', ping.astype(np.uint8))
 
         self.update_config(ping_msg)
 
         # pre-process image
-        ping_deconv = self.sonar.preprocess(ping, False)
-        cv2.imwrite('ping_polar_pp.png', ping_deconv.astype(np.uint8))
+        ping2 = self.sonar.preprocess(ping, False)
+        # cv2.imwrite('ping_polar_pp.png', ping_deconv.astype(np.uint8))
+        ping2c = self.sonar.to_cart(ping)
 
         # convert to cartesian and publish
-        cart_ping = Image()
-        cart_ping.header = ping_msg.header
-        self.ping_pub.publish(cart_ping)
+        cart_ping_msg = self.bridge.cv2_to_imgmsg(ping2c.astype(np.uint8), encoding='8UC1')
+        cart_ping_msg.header = ping_msg.image.header
+        self.ping_pub.publish(cart_ping_msg)
 
         # segment image
+        bin_length = (ping_msg.ranges[-1] - ping_msg.ranges[0])/(ping_msg.num_bins + 0.0)
+        pulse = get_template(dr=bin_length)
+        idx = segment_smap(ping2, pulse, 1.0)
+        idx[idx < 1] = -1
 
-        # publish scans (may require new message spec?)
+        ranges = np.copy(idx).astype(float)
+        ranges[ranges > 0] *= bin_length
+        ranges[ranges > 0] += ping_msg.ranges[0]*np.ones_like(ranges[ranges > 0])
+        intensities = ping2[idx, range(0, ping_msg.num_beams)]
+        intensities[idx < 1] = 0
+
+        # publish scans
+        scan_msg = SonarScan()
+        scan_msg.header = cart_ping_msg.header
+        scan_msg.hfov = 5.236e-3
+        scan_msg.vfov = 17.453e-3
+        scan_msg.range_min = ping_msg.ranges[0]
+        scan_msg.range_max = ping_msg.ranges[-1]
+        scan_msg.ranges = ranges
+        scan_msg.intensities = intensities
+        self.scan_pub.publish(scan_msg)
+
+
 
 if __name__ == '__main__':
     rospy.myargv(argv=sys.argv)
