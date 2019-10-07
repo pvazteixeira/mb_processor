@@ -80,7 +80,9 @@ class Processor(object):
         # check if we need to update the sonar object
 
         # get image
-        ping = self.bridge.imgmsg_to_cv2(ping_msg.image)
+        pingb = self.bridge.imgmsg_to_cv2(ping_msg.image)
+        ping = pingb/255.0
+
         # cv2.imwrite('ping_polar.png', ping.astype(np.uint8))
 
         self.update_config(ping_msg)
@@ -89,6 +91,7 @@ class Processor(object):
         ping2 = self.sonar.preprocess(ping, False)
         # cv2.imwrite('ping_polar_pp.png', ping_deconv.astype(np.uint8))
         ping2c = self.sonar.to_cart(ping)
+        ping2c*=255.0
 
         # convert to cartesian and publish
         cart_ping_msg = self.bridge.cv2_to_imgmsg(ping2c.astype(np.uint8), encoding='8UC1')
@@ -115,10 +118,11 @@ class Processor(object):
         scan_msg.range_min = ping_msg.ranges[0]
         scan_msg.range_max = ping_msg.ranges[-1]
         scan_msg.ranges = ranges
+        scan_msg.azimuths = np.copy(ping_msg.azimuths)
         scan_msg.intensities = intensities
         self.scan_pub.publish(scan_msg)
 
-
+        # TODO: publish LaserScan message just for visualization purposes.
 
 if __name__ == '__main__':
     rospy.myargv(argv=sys.argv)
