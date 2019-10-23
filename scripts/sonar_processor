@@ -132,8 +132,8 @@ if __name__ == '__main__':
     # create processor object
     mb_handler = Processor()
 
-    if rospy.has_param('~sonar_config_file'):
-        mb_handler.load_config(rospy.get_param('~sonar_config_file'))
+    if rospy.has_param('/sonar/config_file'):
+        mb_handler.load_config(rospy.get_param('/sonar/config_file'))
     else:
         rospy.logerr('Sonar configuration not found; must set the \'sonar_config_file\' parameter')
         sys.exit(1)
