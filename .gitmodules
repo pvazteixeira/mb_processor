@@ -1,0 +1,3 @@
+[submodule "scripts/multibeam"]
+	path = scripts/multibeam
+	url = git@github.com:pvazteixeira/multibeam.git
