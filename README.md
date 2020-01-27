@@ -1,6 +1,6 @@
 # mb_processor
 
-catkin package wrapper for the multibeam python module.
+catkin package wrapper for the [multibeam python module](https://github.com/pvazteixeira/multibeam).
 
 ## dependencies 
 
