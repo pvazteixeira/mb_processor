@@ -41,10 +41,10 @@ class Processor(object):
         rospy.logdebug("initializing sonar processor")
 
         rospy.logdebug("setting up subscribers")
-        self.ping_sub = rospy.Subscriber('ping', Ping, self.ping_handler)
+        self.ping_sub = rospy.Subscriber('/ping', Ping, self.ping_handler)
         rospy.logdebug("setting up publishers")
-        self.scan_pub = rospy.Publisher('scan', SonarScan, queue_size=10)
-        self.ping_pub = rospy.Publisher('ping_cart', Image, queue_size=10)
+        self.scan_pub = rospy.Publisher('/ping/scan', SonarScan, queue_size=10)
+        self.ping_pub = rospy.Publisher('/ping/image/cart', Image, queue_size=10)
 
         self.bridge = CvBridge() # used to deserialize sensor_msgs/Image
         self.sonar = Sonar()
@@ -60,8 +60,8 @@ class Processor(object):
         """
         update sonar object if sonar window has changed.
         """
-        min_range = msg.ranges[0]
-        max_range = msg.ranges[-1]
+        min_range = msg.range[0]
+        max_range = msg.range[-1]
 
         if (self.sonar.min_range != min_range) or (self.sonar.max_range != max_range):
             # window parameters have changed
@@ -80,7 +80,7 @@ class Processor(object):
         # check if we need to update the sonar object
 
         # get image
-        pingb = self.bridge.imgmsg_to_cv2(ping_msg.image)
+        pingb = self.bridge.imgmsg_to_cv2(ping_msg.magnitude)
         ping = pingb/255.0
 
         # cv2.imwrite('ping_polar.png', ping.astype(np.uint8))
@@ -95,18 +95,18 @@ class Processor(object):
 
         # convert to cartesian and publish
         cart_ping_msg = self.bridge.cv2_to_imgmsg(ping2c.astype(np.uint8), encoding='8UC1')
-        cart_ping_msg.header = ping_msg.image.header
+        cart_ping_msg.header = ping_msg.magnitude.header
         self.ping_pub.publish(cart_ping_msg)
 
         # segment image
-        bin_length = (ping_msg.ranges[-1] - ping_msg.ranges[0])/(ping_msg.num_bins + 0.0)
+        bin_length = (ping_msg.range[-1] - ping_msg.range[0])/(ping_msg.num_bins + 0.0)
         pulse = get_template(dr=bin_length)
         idx = segment_smap(ping2, pulse, 1.0)
         idx[idx < 1] = -1
 
         ranges = np.copy(idx).astype(float)
         ranges[ranges > 0] *= bin_length
-        ranges[ranges > 0] += ping_msg.ranges[0]*np.ones_like(ranges[ranges > 0])
+        ranges[ranges > 0] += ping_msg.range[0]*np.ones_like(ranges[ranges > 0])
         intensities = ping2[idx, range(0, ping_msg.num_beams)]
         intensities[idx < 1] = 0
 
@@ -115,10 +115,10 @@ class Processor(object):
         scan_msg.header = cart_ping_msg.header
         scan_msg.hfov = 5.236e-3
         scan_msg.vfov = 17.453e-3
-        scan_msg.range_min = ping_msg.ranges[0]
-        scan_msg.range_max = ping_msg.ranges[-1]
+        scan_msg.range_min = ping_msg.range[0]
+        scan_msg.range_max = ping_msg.range[-1]
         scan_msg.ranges = ranges
-        scan_msg.azimuths = np.copy(ping_msg.azimuths)
+        scan_msg.azimuths = np.copy(ping_msg.azimuth)
         scan_msg.intensities = intensities
         self.scan_pub.publish(scan_msg)
 
