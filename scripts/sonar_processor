@@ -3,7 +3,7 @@
 """
 Multibeam ping processing and range extraction
 
-This script subscribes to mb_msgs/Ping messages and publishes both mb_msgs/SonarScan and sensor_msgs/Image. The first is the sonar equivalent of a sensor_msgs/LaserScan, containing the estimated range measurement for each beam; the second is the pre-processed sonar image  converted to Cartesian coordinates for visualization purposes. Thanks to the multibeam library, this script can also save ping information as a PNG (image only) or as protobuf- or JSON-encoded files.
+This script subscribes to mb_msgs/Ping messages and publishes both mb_msgs/Scan and sensor_msgs/Image. The first is the sonar equivalent of a sensor_msgs/LaserScan, containing the estimated range measurement for each beam; the second is the pre-processed sonar image  converted to Cartesian coordinates for visualization purposes. Thanks to the multibeam library, this script can also save ping information as a PNG (image only) or as protobuf- or JSON-encoded files.
 
 Run with
   rosrun mb_processor sonar_processor.py ping:=/reader/ping _sonar_config_file="path-to-config-file"
@@ -28,7 +28,8 @@ from multibeam.utils import *
 # ros - messages
 from sensor_msgs.msg import Image
 # mb - messages
-from mb_msgs.msg import Ping, SonarScan
+from mb_msgs.msg import Ping
+from mb_msgs.msg import Scan
 # ros - image marshalling (cv2<->image)
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -43,7 +44,7 @@ class Processor(object):
         rospy.logdebug("setting up subscribers")
         self.ping_sub = rospy.Subscriber('/ping', Ping, self.ping_handler)
         rospy.logdebug("setting up publishers")
-        self.scan_pub = rospy.Publisher('/ping/scan', SonarScan, queue_size=10)
+        self.scan_pub = rospy.Publisher('/ping/scan', Scan, queue_size=10)
         self.ping_pub = rospy.Publisher('/ping/image/cart', Image, queue_size=10)
 
         self.bridge = CvBridge() # used to deserialize sensor_msgs/Image
@@ -111,15 +112,16 @@ class Processor(object):
         intensities[idx < 1] = 0
 
         # publish scans
-        scan_msg = SonarScan()
+        scan_msg = Scan()
         scan_msg.header = cart_ping_msg.header
         scan_msg.hfov = 5.236e-3
         scan_msg.vfov = 17.453e-3
         scan_msg.range_min = ping_msg.range[0]
         scan_msg.range_max = ping_msg.range[-1]
-        scan_msg.ranges = ranges
-        scan_msg.azimuths = np.copy(ping_msg.azimuth)
-        scan_msg.intensities = intensities
+        scan_msg.range = ranges
+        scan_msg.azimuth = np.copy(ping_msg.azimuth)
+        scan_msg.elevation = np.zeros_like(ping_msg.azimuth)
+        scan_msg.magnitude = intensities
         self.scan_pub.publish(scan_msg)
 
         # TODO: publish LaserScan message just for visualization purposes.
